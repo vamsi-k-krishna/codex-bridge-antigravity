@@ -35,18 +35,41 @@ OpenAI Codex 的 WebSocket 与 HTTP 端点配置属于 **Provider 层级**（提
 ┌──────────────────────────────────┐   ┌──────────────────────┐
 │  官方 OpenAI/ChatGPT 后端        │   │ Google Antigravity   │
 │  (原生 Bearer Token 透传)        │   │ 官方 CLI (`agy`)     │
-└──────────────────────────────────┘   └──────────────────────┘
+└──────────────────────────────────>   └──────────────────────┘
 ```
+
+---
+
+## 支持的模型列表
+
+完整支持官方 Google Antigravity CLI (`agy models`) 提供的全部 14 款模型，均可在 Codex 模型菜单中自由切换：
+
+| 厂商 / 系列 | 模型标识 (Route) | 显示名称 | 推理级别 (Reasoning) |
+|---|---|---|---|
+| **Gemini 3.8 Flash** | `antigravity/gemini-3.8-flash-high` | Gemini 3.8 Flash (High) | High (高) |
+| | `antigravity/gemini-3.8-flash-medium` | Gemini 3.8 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.8-flash-low` | Gemini 3.8 Flash (Low) | Low (低) |
+| **Gemini 3.7 Flash** | `antigravity/gemini-3.7-flash-high` | Gemini 3.7 Flash (High) | High (高) |
+| | `antigravity/gemini-3.7-flash-medium` | Gemini 3.7 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.7-flash-low` | Gemini 3.7 Flash (Low) | Low (低) |
+| **Gemini 3.6 Flash** | `antigravity/gemini-3.6-flash-high` | Gemini 3.6 Flash (High) | High (高) |
+| | `antigravity/gemini-3.6-flash-medium` | Gemini 3.6 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.6-flash-low` | Gemini 3.6 Flash (Low) | Low (低) |
+| **Gemini 3.1 Pro** | `antigravity/gemini-3.1-pro-high` | Gemini 3.1 Pro (High) | High (高) |
+| | `antigravity/gemini-3.1-pro-low` | Gemini 3.1 Pro (Low) | Low (低) |
+| **Anthropic Claude** | `antigravity/claude-sonnet-4-6` | Claude Sonnet 4.6 (Thinking) | 深度思考 (Thinking) |
+| | `antigravity/claude-opus-4-6-thinking` | Claude Opus 4.6 (Thinking) | 深度思考 (Thinking) |
+| **开源模型** | `antigravity/gpt-oss-120b-medium` | GPT-OSS 120B (Medium) | Medium (中) |
 
 ---
 
 ## 主要特性
 
 - **零干扰双向共存**：原生 GPT 模型依然直连官方后端，完全不会进入 Antigravity。
-- **动态模型目录同步**：自动从 `agy models` 实时读取可用模型（如 Gemini 3.8 Flash、Gemini 3.8 Pro）。
+- **全模型动态目录同步**：自动从 `agy models` 实时读取全部 14 款可用模型（Gemini Flash/Pro、Claude、GPT-OSS）。
 - **修复 Codex 切换模型报错**：修复模型目录配置中的 `use_responses_lite = false`，彻底解决切换至 Antigravity 模型时 Codex 前端账号校验崩溃的问题。
 - **对话历史压缩（Compaction）**：完整实现 `/v1/responses/compact` 端点，遵循 OpenAI Compact API 规范，对话过长时平滑自动总结。
-- **一键配置与安全还原**：`setup` 自动备份并修改 `~/.codex/config.toml`；随时可使用 `disconnect` 命令完全还原。
+- **一键配置与快速切换**：`setup` 自动备份原配置并启动后台守护服务；支持随时一键在 原生旧配置 与 Antigravity 配置 间来回切换。
 
 ### 图片输入
 
@@ -62,62 +85,97 @@ Antigravity 模型路由会声明 `input_modalities: ["text", "image"]`。本地
 
 ---
 
-## 快速上手
+## 快速上手（复制即用）
 
-### 1. 检测与诊断
+### 1. 运行安装
 
-克隆本项目并检测本地环境：
+克隆本项目，一键写入 Codex 配置并启动后台守护进程：
 
 ```bash
 git clone https://github.com/Jakevin/codex-bridge-antigravity.git
 cd codex-bridge-antigravity
 
-# 运行自动化回归测试
-npm test
-
-# 诊断 agy 与 Codex 本地配置路径
+# 检测环境
 node src/cli.mjs doctor
+
+# 自动配置 Codex 并启动后台服务
+npm run setup
 ```
 
-### 2. 启动本地守护进程（Daemon）
+### 2. 重启 Codex
 
-启动桥接服务器（默认监听端口 `17842`）：
+重启您的 **OpenAI Codex Desktop** 客户端或 **Codex CLI**。全部 14 款 Antigravity 模型即可在模型下拉菜单中与原生 GPT 模型并排使用！
 
-```bash
-node src/cli.mjs serve --cwd "$PWD"
-```
-
-在另一终端窗口测试端点：
+### 3. 验证（可选）
 
 ```bash
-# 健康检查
-curl http://127.0.0.1:17842/healthz
+# 查看当前状态与模型数量
+npm run status
 
-# 查询模型目录
-curl http://127.0.0.1:17842/v1/models
-
-# 测试生成响应
+# 测试 Gemini 3.8 Flash 模型连通性
 curl http://127.0.0.1:17842/v1/responses \
   -H 'content-type: application/json' \
   -d '{"model":"antigravity/gemini-3.8-flash-low","input":"Reply with exactly AGY_OK"}'
 ```
 
-### 3. 集成至 Codex
+---
 
-将桥接器写入 Codex 配置文件：
+## 配置快速切换（原生旧配置 ⇄ Antigravity 配置）
+
+可随时随地自由在 原生旧配置 与 Antigravity 配置 之间往返切换。
+
+### 🔄 单命令一键来回切换（Toggle）
+
+自动检测当前生效的配置并切到另一模式：
 
 ```bash
-node src/cli.mjs setup --cwd "$PWD" --replace-codex-route
+npm run toggle
+# 或: node src/cli.mjs toggle
 ```
 
-重启 Codex Desktop 应用程序或重启 Codex CLI。现在模型菜单中除原生 GPT 模型外，还会出现 `Gemini 3.8 Flash ...` 模型可供选择。
+- 若当前是 **Antigravity 模式**：自动还原为原生旧配置，并停止后台守护进程。
+- 若当前是 **原生模式**：自动启用 Antigravity 配置，并启动后台守护进程。
 
-### 4. 断开集成与恢复
-
-若想还原至运行 `setup` 前的 Codex 配置，随时执行：
+### 🎯 指定切换命令
 
 ```bash
-node src/cli.mjs disconnect
+# 切换为 Antigravity 配置（启动桥接服务）
+npm run enable
+# 或: node src/cli.mjs switch antigravity
+
+# 切换回 原生 / 原始旧配置（恢复备份并停止桥接服务）
+npm run disable
+# 或: node src/cli.mjs switch native
+```
+
+### 📊 查看当前状态
+
+```bash
+npm run status
+# 或: node src/cli.mjs status
+```
+
+### ⚡ 纯 Shell 快速文件替换（无需 Node/NPM）
+
+如需在任意终端直接替换配置文件：
+
+```bash
+# 切回 原生 / 旧配置：
+cp ~/.codex-bridge-antigravity/codex/config.toml.before-antigravity ~/.codex/config.toml
+
+# 切到 Antigravity 配置：
+cp ~/.codex-bridge-antigravity/codex/config.toml.antigravity ~/.codex/config.toml
+```
+
+> **提示**：切换配置后请重启 Codex Desktop 或 CLI 以生效。
+
+### 🔌 完全卸载与恢复
+
+彻底解除集成、移除后台服务并还原配置：
+
+```bash
+npm run disconnect
+# 或: node src/cli.mjs disconnect
 ```
 
 ---

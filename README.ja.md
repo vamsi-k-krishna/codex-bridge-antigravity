@@ -40,13 +40,36 @@ OpenAI Codex の WebSocket および HTTP エンドポイント設定は、個�
 
 ---
 
+## 対応モデル一覧
+
+公式 Google Antigravity CLI (`agy models`) で提供される全 14 モデルを完全サポートしており、Codex のモデルメニューから即座に選択できます：
+
+| プロバイダ / シリーズ | モデルルート (Route) | 表示名 | 推論エフォート (Reasoning) |
+|---|---|---|---|
+| **Gemini 3.8 Flash** | `antigravity/gemini-3.8-flash-high` | Gemini 3.8 Flash (High) | High (高) |
+| | `antigravity/gemini-3.8-flash-medium` | Gemini 3.8 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.8-flash-low` | Gemini 3.8 Flash (Low) | Low (低) |
+| **Gemini 3.7 Flash** | `antigravity/gemini-3.7-flash-high` | Gemini 3.7 Flash (High) | High (高) |
+| | `antigravity/gemini-3.7-flash-medium` | Gemini 3.7 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.7-flash-low` | Gemini 3.7 Flash (Low) | Low (低) |
+| **Gemini 3.6 Flash** | `antigravity/gemini-3.6-flash-high` | Gemini 3.6 Flash (High) | High (高) |
+| | `antigravity/gemini-3.6-flash-medium` | Gemini 3.6 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.6-flash-low` | Gemini 3.6 Flash (Low) | Low (低) |
+| **Gemini 3.1 Pro** | `antigravity/gemini-3.1-pro-high` | Gemini 3.1 Pro (High) | High (高) |
+| | `antigravity/gemini-3.1-pro-low` | Gemini 3.1 Pro (Low) | Low (低) |
+| **Anthropic Claude** | `antigravity/claude-sonnet-4-6` | Claude Sonnet 4.6 (Thinking) | 思考モード (Thinking) |
+| | `antigravity/claude-opus-4-6-thinking` | Claude Opus 4.6 (Thinking) | 思考モード (Thinking) |
+| **オープンソース** | `antigravity/gpt-oss-120b-medium` | GPT-OSS 120B (Medium) | Medium (中) |
+
+---
+
 ## 主な特徴
 
 - **完全共存**：ネイティブ GPT モデルは公式バックエンドへ直結され、Antigravity 側に送信されることはありません。
-- **動的モデルカタログ同期**：`agy models` から利用可能なモデル（Gemini 3.8 Flash、Gemini 3.8 Pro など）をリアルタイムで取得・統合します。
+- **全 14 モデルの動的カタログ同期**：`agy models` から利用可能なモデル（Gemini Flash/Pro、Claude、GPT-OSS）をリアルタイムで取得・統合します。
 - **Codex モデル切り替えエラーの解消**：モデル定義の `use_responses_lite = false` を適用し、Codex クライアントでのモデル切り替え時の検証エラーを防止します。
 - **会話履歴の自動要約（Compaction）対応**：OpenAI Compact API 仕様に準拠した `/v1/responses/compact` エンドポイントを実装し、コンテキスト上限に近づいた際の自動要約がスムーズに機能します。
-- **ワンコマンドでの設定と復元**：`setup` により `~/.codex/config.toml` を自動バックアップした上で設定し、`disconnect` でいつでも元の設定へ安全に戻せます。
+- **ワンコマンドでの設定と簡単トグル**：`setup` により `~/.codex/config.toml` を自動バックアップした上で設定し、いつでもワンコマンドで元の設定と Antigravity 設定をトグル切り替えできます。
 
 ### 画像入力
 
@@ -62,62 +85,97 @@ Antigravity モデルのルートは `input_modalities: ["text", "image"]` を�
 
 ---
 
-## クイックスタート
+## クイックスタート（コピペで即実行）
 
-### 1. 環境検証と診断
+### 1. セットアップの実行
 
-リポジトリをクローンし、ローカル環境をチェックします：
+リポジトリをクローンし、Codex へのルート設定とバックグラウンドデーモンの起動を一括で行います：
 
 ```bash
 git clone https://github.com/Jakevin/codex-bridge-antigravity.git
 cd codex-bridge-antigravity
 
-# 自動回帰テストの実行
-npm test
-
-# agy および Codex のパス診断
+# 環境の診断
 node src/cli.mjs doctor
+
+# Codex への自動設定およびバックグラウンドサービス起動
+npm run setup
 ```
 
-### 2. ローカルデーモンの起動
+### 2. Codex の再起動
 
-ブリッジサーバーを起動します（デフォルトポート: `17842`）：
+**OpenAI Codex Desktop** アプリまたは **Codex CLI** を再起動します。ネイティブ GPT モデルと並んで、全 14 モデルの Antigravity モデルがドロップダウンから選択可能になります！
 
-```bash
-node src/cli.mjs serve --cwd "$PWD"
-```
-
-別ターミナルから直接エンドポイントをテストします：
+### 3. 動作確認（任意）
 
 ```bash
-# ヘルスチェック
-curl http://127.0.0.1:17842/healthz
+# 現在のステータスとモデル数を確認
+npm run status
 
-# モデルカタログの取得
-curl http://127.0.0.1:17842/v1/models
-
-# 応答生成テスト
+# Gemini 3.8 Flash でのテスト
 curl http://127.0.0.1:17842/v1/responses \
   -H 'content-type: application/json' \
   -d '{"model":"antigravity/gemini-3.8-flash-low","input":"Reply with exactly AGY_OK"}'
 ```
 
-### 3. Codex への統合
+---
 
-ブリッジのルーティング設定を Codex に反映します：
+## 設定の簡単切り替え（元の設定 ⇄ Antigravity 設定）
+
+元のネイティブ Codex 設定と Antigravity 設定は、いつでも手軽に切り替えることができます。
+
+### 🔄 ワンコマンドでのトグル切り替え（Toggle）
+
+現在の設定を自動検知し、もう一方の設定へと瞬時に切り替えます：
 
 ```bash
-node src/cli.mjs setup --cwd "$PWD" --replace-codex-route
+npm run toggle
+# または: node src/cli.mjs toggle
 ```
 
-Codex Desktop アプリまたは Codex CLI を再起動すると、モデル選択メニューにネイティブ GPT モデルと並んで `Gemini 3.8 Flash ...` モデルが表示されます。
+- **Antigravity モード時**：元の設定を復元し、バックグラウンドサービスを停止します。
+- **ネイティブモード時**：Antigravity 設定を有効化し、バックグラウンドサービスを起動します。
 
-### 4. 設定の解除と復元
-
-`setup` 実行前の Codex 設定に戻したい場合は、以下を実行します：
+### 🎯 個別指定切り替えコマンド
 
 ```bash
-node src/cli.mjs disconnect
+# Antigravity 設定へ切り替え（ブリッジデーモン起動）
+npm run enable
+# または: node src/cli.mjs switch antigravity
+
+# 元のネイティブ設定へ切り替え（バックアップを復元しデーモン停止）
+npm run disable
+# または: node src/cli.mjs switch native
+```
+
+### 📊 現在のステータス確認
+
+```bash
+npm run status
+# または: node src/cli.mjs status
+```
+
+### ⚡ シェルから直接ファイル差し替え（Node/NPM 不要）
+
+スクリプトを介さず、任意のターミナルから直接設定ファイルを差し替える場合：
+
+```bash
+# 元のネイティブ設定に戻す：
+cp ~/.codex-bridge-antigravity/codex/config.toml.before-antigravity ~/.codex/config.toml
+
+# Antigravity 設定に切り替える：
+cp ~/.codex-bridge-antigravity/codex/config.toml.antigravity ~/.codex/config.toml
+```
+
+> **注意**：設定を切り替えた後は、Codex Desktop アプリまたは CLI を再起動してください。
+
+### 🔌 完全な削除と復元
+
+統合を完全に解除し、バックグラウンドデーモンをアンインストールして元の設定に戻す場合：
+
+```bash
+npm run disconnect
+# または: node src/cli.mjs disconnect
 ```
 
 ---

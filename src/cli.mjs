@@ -2,10 +2,21 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { agyVersion } from "./agy.mjs";
-import { appHome, catalogPath, codexConfigPath, integrationStatePath, loadConfig, resolveAgyExecutable, resolveCwd, saveConfig } from "./config.mjs";
+import {
+  antigravityCodexConfigPath,
+  appHome,
+  backupCodexConfigPath,
+  catalogPath,
+  codexConfigPath,
+  integrationStatePath,
+  loadConfig,
+  resolveAgyExecutable,
+  resolveCwd,
+  saveConfig,
+} from "./config.mjs";
 import { buildCodexCatalog, discoverAgyModels } from "./models.mjs";
 import { createBridgeServer, listenBridge } from "./server.mjs";
-import { installService, uninstallService } from "./service.mjs";
+import { installService, isServiceRunning, restartService, startService, stopService, uninstallService } from "./service.mjs";
 
 function parseArgs(args) {
   const options = {};
@@ -167,7 +178,7 @@ async function setup(options) {
     throw new Error(`Codex already routes through ${routeInUse}. Use --replace-codex-route to switch it reversibly.`);
   }
 
-  const backupPath = existingState?.backupPath || join(appHome(), "codex", "config.toml.before-antigravity");
+  const backupPath = existingState?.backupPath || backupCodexConfigPath();
   if (!existingState && configExists) {
     mkdirSync(dirname(backupPath), { recursive: true, mode: 0o700 });
     copyFileSync(configPath, backupPath);
@@ -183,14 +194,18 @@ async function setup(options) {
   // to ChatGPT, while antigravity/* frames are translated to AGY CLI turns.
   patched = ensureRouterProvider(patched, provider, route);
   atomicWrite(configPath, patched);
+  atomicWrite(antigravityCodexConfigPath(), patched);
   const state = {
     version: 1,
+    active: "antigravity",
     configPath,
     route,
     catalogPath: managedCatalogPath,
     hadConfig: configExists,
     backupPath: configExists && existsSync(backupPath) ? backupPath : null,
-    installedAt: new Date().toISOString(),
+    antigravityConfigPath: antigravityCodexConfigPath(),
+    installedAt: existingState?.installedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   atomicWrite(statePath, `${JSON.stringify(state, null, 2)}\n`);
   saveConfig(config);
@@ -198,7 +213,129 @@ async function setup(options) {
   console.log(`Codex route installed: ${route}`);
   console.log(`Models installed: ${config.models.length}`);
   if (service.installed) console.log(`Background service installed: ${service.plistPath}`);
-  console.log(`Codex restart required. To restore the previous route: codex-bridge-antigravity disconnect`);
+  console.log(`Codex restart required. To toggle/switch config: codex-bridge-antigravity toggle`);
+  console.log(`To restore the previous route: codex-bridge-antigravity disconnect`);
+}
+
+export function isAntigravityActive() {
+  const configPath = codexConfigPath();
+  if (!existsSync(configPath)) return false;
+  const currentText = readFileSync(configPath, "utf8");
+  const currentRoute = getTopLevelAssignment(currentText, "openai_base_url");
+  const provider = getTopLevelAssignment(currentText, "model_provider");
+  if (provider === "antigravity-router") return true;
+  if (typeof currentRoute === "string" && (currentRoute.includes(":17842") || currentRoute.includes("/v1"))) {
+    return true;
+  }
+  return false;
+}
+
+export async function switchToNative() {
+  const configPath = codexConfigPath();
+  const backupPath = backupCodexConfigPath();
+  const statePath = integrationStatePath();
+  const existingState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : undefined;
+  const resolvedBackup = existingState?.backupPath || backupPath;
+
+  if (existsSync(configPath) && isAntigravityActive()) {
+    atomicWrite(antigravityCodexConfigPath(), readFileSync(configPath, "utf8"));
+  }
+
+  if (existsSync(resolvedBackup)) {
+    copyFileSync(resolvedBackup, configPath);
+    console.log(`✓ Restored native Codex configuration from ${resolvedBackup}`);
+  } else if (existingState && !existingState.hadConfig && existsSync(configPath)) {
+    unlinkSync(configPath);
+    console.log("✓ Removed Codex configuration created by Antigravity setup");
+  } else {
+    throw new Error(`Backup configuration not found at ${resolvedBackup}`);
+  }
+
+  stopService();
+  console.log("✓ Stopped Antigravity background service");
+
+  if (existingState) {
+    existingState.active = "native";
+    existingState.switchedAt = new Date().toISOString();
+    atomicWrite(statePath, `${JSON.stringify(existingState, null, 2)}\n`);
+  }
+
+  console.log("\nCodex is now using Native / Original configuration (direct OpenAI/ChatGPT routing).");
+  console.log("Restart Codex Desktop or CLI to apply changes.");
+}
+
+export async function switchToAntigravity(options = {}) {
+  const statePath = integrationStatePath();
+  const antigravityConfig = antigravityCodexConfigPath();
+  const configPath = codexConfigPath();
+
+  if (!existsSync(statePath) || !existsSync(antigravityConfig)) {
+    console.log("Setting up Antigravity integration...");
+    return setup({ ...options, replaceCodexRoute: true });
+  }
+
+  let config = await freshConfig(options);
+  config = await refreshModels(config);
+  const managedCatalog = buildCodexCatalog(config.models);
+  atomicWrite(catalogPath(), `${JSON.stringify(managedCatalog, null, 2)}\n`);
+
+  if (existsSync(configPath) && !isAntigravityActive()) {
+    const backupPath = backupCodexConfigPath();
+    if (!existsSync(backupPath)) {
+      mkdirSync(dirname(backupPath), { recursive: true, mode: 0o700 });
+      copyFileSync(configPath, backupPath);
+      chmodSync(backupPath, 0o600);
+    }
+  }
+
+  copyFileSync(antigravityConfig, configPath);
+  console.log("✓ Activated Antigravity Codex configuration");
+
+  restartService();
+  console.log("✓ Antigravity background service running");
+
+  const state = JSON.parse(readFileSync(statePath, "utf8"));
+  state.active = "antigravity";
+  state.switchedAt = new Date().toISOString();
+  atomicWrite(statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+  console.log(`✓ Models available: ${config.models.length}`);
+  console.log("\nCodex is now using Antigravity configuration (Google Antigravity models + native GPT router).");
+  console.log("Restart Codex Desktop or CLI to apply changes.");
+}
+
+export async function toggle(options = {}) {
+  if (isAntigravityActive()) {
+    console.log("Currently active: Antigravity. Toggling to Native / Original configuration...");
+    await switchToNative();
+  } else {
+    console.log("Currently active: Native / Original. Toggling to Antigravity configuration...");
+    await switchToAntigravity(options);
+  }
+}
+
+export async function status(options = {}) {
+  const config = await freshConfig(options);
+  const active = isAntigravityActive();
+  const serviceRunning = isServiceRunning();
+  console.log("=== Codex Bridge Antigravity Status ===");
+  console.log(`  Active Config:   ${active ? "Antigravity (Bridge Router)" : "Native / Original (Direct OpenAI)"}`);
+  console.log(`  Codex Config:    ${codexConfigPath()}`);
+  console.log(`  Daemon Service:  ${serviceRunning ? "Running" : "Stopped"}`);
+  try {
+    const response = await fetch(`http://${config.host}:${config.port}/healthz`);
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`  Responses Proxy: Online (http://${config.host}:${config.port}/v1) [${data.model_count} models]`);
+    } else {
+      console.log(`  Responses Proxy: HTTP ${response.status}`);
+    }
+  } catch {
+    console.log(`  Responses Proxy: Offline`);
+  }
+  const backup = backupCodexConfigPath();
+  console.log(`  Backup Config:   ${existsSync(backup) ? backup : "Not created yet"}`);
+  console.log("=======================================");
 }
 
 function disconnect() {
@@ -217,7 +354,10 @@ function disconnect() {
     unlinkSync(state.configPath);
     console.log("Removed the Codex config created by Antigravity setup");
   }
+  const antigravityConfig = antigravityCodexConfigPath();
+  if (existsSync(antigravityConfig)) unlinkSync(antigravityConfig);
   unlinkSync(statePath);
+  console.log("✓ Integration disconnected and configuration restored.");
 }
 
 async function doctor(options) {
@@ -291,6 +431,20 @@ async function main() {
   if (command === "setup") return setup(options);
   if (command === "refresh-catalog") return refreshCatalog(options);
   if (command === "disconnect") return disconnect();
+  if (command === "toggle") return toggle(options);
+  if (command === "switch") {
+    const target = (positional[1] || "").toLowerCase();
+    if (["native", "old", "original", "codex", "default"].includes(target)) {
+      return switchToNative();
+    }
+    if (["antigravity", "agy", "bridge"].includes(target)) {
+      return switchToAntigravity(options);
+    }
+    return toggle(options);
+  }
+  if (command === "enable") return switchToAntigravity(options);
+  if (command === "disable") return switchToNative();
+  if (command === "status") return status(options);
   throw new Error(`Unknown command: ${command}`);
 }
 

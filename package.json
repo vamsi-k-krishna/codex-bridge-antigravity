@@ -11,6 +11,14 @@
     "serve": "node src/cli.mjs serve",
     "doctor": "node src/cli.mjs doctor",
     "setup": "node src/cli.mjs setup",
+    "toggle": "node src/cli.mjs toggle",
+    "switch": "node src/cli.mjs toggle",
+    "enable": "node src/cli.mjs enable",
+    "disable": "node src/cli.mjs disable",
+    "status": "node src/cli.mjs status",
+    "models": "node src/cli.mjs models",
+    "refresh-catalog": "node src/cli.mjs refresh-catalog",
+    "disconnect": "node src/cli.mjs disconnect",
     "test": "node --test test/*.test.mjs"
   },
   "repository": {

@@ -144,6 +144,7 @@ export function installService(config) {
     if (enabled.status !== 0) {
       throw new Error(`systemctl enable failed: ${(enabled.stderr || enabled.stdout || "unknown error").trim()}`);
     }
+    spawnSync("systemctl", ["--user", "restart", `${SERVICE_LABEL}.service`]);
     return { installed: true, plistPath: servicePath, servicePath, target: `${SERVICE_LABEL}.service` };
   }
   return { installed: false, reason: "Unsupported OS" };
@@ -167,4 +168,56 @@ export function uninstallService() {
   }
   return { removed: false, reason: "Unsupported OS" };
 }
+
+export function startService() {
+  if (process.platform === "darwin") {
+    const user = uid();
+    const plistPath = servicePlistPath();
+    if (user && existsSync(plistPath)) {
+      launchctl(["bootstrap", `gui/${user}`, plistPath]);
+    }
+    return;
+  }
+  if (process.platform === "linux") {
+    spawnSync("systemctl", ["--user", "start", `${SERVICE_LABEL}.service`]);
+  }
+}
+
+export function stopService() {
+  if (process.platform === "darwin") {
+    const user = uid();
+    if (user) launchctl(["bootout", `gui/${user}/${SERVICE_LABEL}`]);
+    return;
+  }
+  if (process.platform === "linux") {
+    spawnSync("systemctl", ["--user", "stop", `${SERVICE_LABEL}.service`]);
+  }
+}
+
+export function isServiceRunning() {
+  if (process.platform === "darwin") {
+    const user = uid();
+    if (!user) return false;
+    const res = launchctl(["print", `gui/${user}/${SERVICE_LABEL}`]);
+    return res.status === 0;
+  }
+  if (process.platform === "linux") {
+    const res = spawnSync("systemctl", ["--user", "is-active", `${SERVICE_LABEL}.service`], { encoding: "utf8" });
+    return res.status === 0 && res.stdout.trim() === "active";
+  }
+  return false;
+}
+
+export function restartService() {
+  if (process.platform === "darwin") {
+    stopService();
+    startService();
+    return;
+  }
+  if (process.platform === "linux") {
+    spawnSync("systemctl", ["--user", "restart", `${SERVICE_LABEL}.service`]);
+  }
+}
+
+
 

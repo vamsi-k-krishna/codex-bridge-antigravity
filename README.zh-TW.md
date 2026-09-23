@@ -40,13 +40,36 @@ OpenAI Codex 的 WebSocket 與 HTTP 端點設定屬於 **Provider 層級**（供
 
 ---
 
+## 支援的模型清單
+
+完整支援官方 Google Antigravity CLI (`agy models`) 提供的全部 14 款模型，均可在 Codex 模型選單中自由選用：
+
+| 廠商 / 系列 | 模型路徑 (Route) | 顯示名稱 | 推理級別 (Reasoning) |
+|---|---|---|---|
+| **Gemini 3.8 Flash** | `antigravity/gemini-3.8-flash-high` | Gemini 3.8 Flash (High) | High (高) |
+| | `antigravity/gemini-3.8-flash-medium` | Gemini 3.8 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.8-flash-low` | Gemini 3.8 Flash (Low) | Low (低) |
+| **Gemini 3.7 Flash** | `antigravity/gemini-3.7-flash-high` | Gemini 3.7 Flash (High) | High (高) |
+| | `antigravity/gemini-3.7-flash-medium` | Gemini 3.7 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.7-flash-low` | Gemini 3.7 Flash (Low) | Low (低) |
+| **Gemini 3.6 Flash** | `antigravity/gemini-3.6-flash-high` | Gemini 3.6 Flash (High) | High (高) |
+| | `antigravity/gemini-3.6-flash-medium` | Gemini 3.6 Flash (Medium) | Medium (中) |
+| | `antigravity/gemini-3.6-flash-low` | Gemini 3.6 Flash (Low) | Low (低) |
+| **Gemini 3.1 Pro** | `antigravity/gemini-3.1-pro-high` | Gemini 3.1 Pro (High) | High (高) |
+| | `antigravity/gemini-3.1-pro-low` | Gemini 3.1 Pro (Low) | Low (低) |
+| **Anthropic Claude** | `antigravity/claude-sonnet-4-6` | Claude Sonnet 4.6 (Thinking) | 深度思考 (Thinking) |
+| | `antigravity/claude-opus-4-6-thinking` | Claude Opus 4.6 (Thinking) | 深度思考 (Thinking) |
+| **開源模型** | `antigravity/gpt-oss-120b-medium` | GPT-OSS 120B (Medium) | Medium (中) |
+
+---
+
 ## 主要特點
 
 - **零干擾雙向共存**：原生 GPT 模型依舊直連官方後端，完全不會被傳入 Antigravity。
-- **動態模型目錄同步**：自動從 `agy models` 即時讀取可用模型（如 Gemini 3.8 Flash、Gemini 3.8 Pro）。
+- **全模型動態目錄同步**：自動從 `agy models` 即時讀取全部 14 款可用模型（Gemini Flash/Pro、Claude、GPT-OSS）。
 - **修復 Codex 切換模型錯誤**：修正模型目錄中的 `use_responses_lite = false`，徹底解決切換到 Antigravity 模型時 Codex 前端帳號驗證崩潰的問題。
 - **對話歷程壓縮（Compaction）**：完整實作 `/v1/responses/compact` 端點，符合 OpenAI Compact API 規格，對話過長時能自動完成摘要總結。
-- **一鍵安裝與安全復原**：`setup` 自動備份並設定 `~/.codex/config.toml`；隨時可透過 `disconnect` 指令完全還原。
+- **一鍵設定與輕鬆切換**：`setup` 自動備份並設定 `~/.codex/config.toml`；支援隨時一鍵在 原生舊設定 與 Antigravity 設定 之間往返切換。
 
 ### 圖片輸入
 
@@ -62,62 +85,97 @@ Antigravity 模型路由會宣告 `input_modalities: ["text", "image"]`。本機
 
 ---
 
-## 快速開始
+## 快速開始（複製貼上即可執行）
 
-### 1. 檢測與診斷
+### 1. 執行安裝
 
-複製此專案並檢測本機環境：
+複製本專案，一鍵寫入 Codex 設定並啟動背景守護程序：
 
 ```bash
 git clone https://github.com/Jakevin/codex-bridge-antigravity.git
 cd codex-bridge-antigravity
 
-# 執行自動化回歸測試
-npm test
-
-# 診斷 agy 與 Codex 本機設定路徑
+# 檢測環境
 node src/cli.mjs doctor
+
+# 自動設定 Codex 並啟動背景服務
+npm run setup
 ```
 
-### 2. 啟動本機守護程序（Daemon）
+### 2. 重新啟動 Codex
 
-啟動橋接伺服器（預設監聽連接埠 `17842`）：
+重新啟動您的 **OpenAI Codex Desktop** 應用程式或 **Codex CLI**。全部 14 款 Antigravity 模型即可在模型下拉選單中與原生 GPT 模型並列選用！
 
-```bash
-node src/cli.mjs serve --cwd "$PWD"
-```
-
-在另一個終端機視窗測試端點：
+### 3. 驗證（選用）
 
 ```bash
-# 健康檢查
-curl http://127.0.0.1:17842/healthz
+# 查看目前狀態與模型數量
+npm run status
 
-# 查詢模型目錄
-curl http://127.0.0.1:17842/v1/models
-
-# 測試生成回答
+# 測試 Gemini 3.8 Flash 模型連線
 curl http://127.0.0.1:17842/v1/responses \
   -H 'content-type: application/json' \
   -d '{"model":"antigravity/gemini-3.8-flash-low","input":"Reply with exactly AGY_OK"}'
 ```
 
-### 3. 整合至 Codex
+---
 
-將橋接器寫入 Codex 設定檔中：
+## 設定快速切換（原生舊設定 ⇄ Antigravity 設定）
+
+隨時隨地自由在 原生舊設定 與 Antigravity 設定 之間快速切換。
+
+### 🔄 單一指令一鍵來回切換（Toggle）
+
+自動偵測目前生效的設定並切換至另一模式：
 
 ```bash
-node src/cli.mjs setup --cwd "$PWD" --replace-codex-route
+npm run toggle
+# 或: node src/cli.mjs toggle
 ```
 
-重新啟動 Codex Desktop 應用程式或重新開啟 Codex CLI。現在模型選單中除了原生的 GPT 模型外，還會出現 `Gemini 3.8 Flash ...` 模型可供選取。
+- 若目前是 **Antigravity 模式**：自動還原為原生舊設定，並停止背景守護程序。
+- 若目前是 **原生模式**：自動啟用 Antigravity 設定，並啟動背景守護程序。
 
-### 4. 取消整合與還原
-
-若想還原至執行 `setup` 前的 Codex 設定，隨時執行：
+### 🎯 指定切換指令
 
 ```bash
-node src/cli.mjs disconnect
+# 切換為 Antigravity 設定（啟動橋接服務）
+npm run enable
+# 或: node src/cli.mjs switch antigravity
+
+# 切換回 原生 / 原始舊設定（復原備份並停止橋接服務）
+npm run disable
+# 或: node src/cli.mjs switch native
+```
+
+### 📊 查看目前狀態
+
+```bash
+npm run status
+# 或: node src/cli.mjs status
+```
+
+### ⚡ 純 Shell 快速檔案替換（無需 Node/NPM）
+
+如需在任意終端機直接替換設定檔：
+
+```bash
+# 切回 原生 / 舊設定：
+cp ~/.codex-bridge-antigravity/codex/config.toml.before-antigravity ~/.codex/config.toml
+
+# 切到 Antigravity 設定：
+cp ~/.codex-bridge-antigravity/codex/config.toml.antigravity ~/.codex/config.toml
+```
+
+> **提示**：切換設定後請重新啟動 Codex Desktop 或 CLI 以套用變更。
+
+### 🔌 完全移除與還原
+
+徹底解除整合、移除背景服務並還原設定：
+
+```bash
+npm run disconnect
+# 或: node src/cli.mjs disconnect
 ```
 
 ---

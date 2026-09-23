@@ -15,6 +15,7 @@ import {
 } from "../src/prompt.mjs";
 import { buildCodexCatalog, isAllowedAgyModel, parseAgyModels } from "../src/models.mjs";
 import { createBridgeServer, expandPreviousResponse, listenBridge } from "../src/server.mjs";
+import { isAntigravityActive } from "../src/cli.mjs";
 
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
@@ -94,20 +95,29 @@ test("parses the live agy models table shape", () => {
   assert.deepEqual(models.map(model => model.id), ["gemini-3.8-flash-low", "claude-sonnet-4-6"]);
 });
 
-test("filters models to Gemini 3.8 Flash and newer", () => {
+test("allows all valid AGY models (Gemini, Claude, GPT-OSS)", () => {
   assert.equal(isAllowedAgyModel("gemini-3.8-flash-high"), true);
   assert.equal(isAllowedAgyModel("gemini-3.8-flash-medium"), true);
   assert.equal(isAllowedAgyModel("gemini-3.8-flash-low"), true);
-  assert.equal(isAllowedAgyModel("gemini-3.9-flash-high"), true);
-  assert.equal(isAllowedAgyModel("gemini-4.0-flash"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.7-flash-high"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.7-flash-medium"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.7-flash-low"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.6-flash-high"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.6-flash-medium"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.6-flash-low"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.1-pro-high"), true);
+  assert.equal(isAllowedAgyModel("gemini-3.1-pro-low"), true);
+  assert.equal(isAllowedAgyModel("claude-sonnet-4-6"), true);
+  assert.equal(isAllowedAgyModel("claude-opus-4-6-thinking"), true);
+  assert.equal(isAllowedAgyModel("gpt-oss-120b-medium"), true);
   assert.equal(isAllowedAgyModel("antigravity/gemini-3.8-flash-high"), true);
-  assert.equal(isAllowedAgyModel({ id: "antigravity/gemini-3.8-flash-low" }), true);
+  assert.equal(isAllowedAgyModel({ id: "antigravity/claude-sonnet-4-6" }), true);
 
-  assert.equal(isAllowedAgyModel("gemini-3.7-flash-high"), false);
-  assert.equal(isAllowedAgyModel("gemini-3.6-flash-low"), false);
-  assert.equal(isAllowedAgyModel("gemini-3.1-pro-high"), false);
-  assert.equal(isAllowedAgyModel("claude-sonnet-4-6"), false);
-  assert.equal(isAllowedAgyModel("gpt-oss-120b-medium"), false);
+  assert.equal(isAllowedAgyModel(""), false);
+  assert.equal(isAllowedAgyModel("   "), false);
+  assert.equal(isAllowedAgyModel(null), false);
+  assert.equal(isAllowedAgyModel(undefined), false);
+  assert.equal(isAllowedAgyModel("invalid model with spaces"), false);
 });
 
 test("builds a prompt from Responses input", () => {
@@ -337,3 +347,22 @@ process.stdin.once("data", () => {
     rmSync(agyDir, { recursive: true, force: true });
   }
 });
+
+test("detects active Antigravity routing configuration", () => {
+  const dir = mkdtempSync(join(tmpdir(), "codex-test-"));
+  const configPath = join(dir, "config.toml");
+  const previousCodexHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = dir;
+  try {
+    writeFileSync(configPath, 'model = "gpt-5.6"\nmodel_provider = "openai"\n');
+    assert.equal(isAntigravityActive(), false);
+
+    writeFileSync(configPath, 'model = "gpt-5.6"\nopenai_base_url = "http://127.0.0.1:17842/v1"\nmodel_provider = "antigravity-router"\n');
+    assert.equal(isAntigravityActive(), true);
+  } finally {
+    if (previousCodexHome !== undefined) process.env.CODEX_HOME = previousCodexHome;
+    else delete process.env.CODEX_HOME;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

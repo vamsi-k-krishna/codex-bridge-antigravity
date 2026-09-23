@@ -29,6 +29,14 @@ export function integrationStatePath() {
   return join(appHome(), "codex", "integration.json");
 }
 
+export function backupCodexConfigPath() {
+  return join(appHome(), "codex", "config.toml.before-antigravity");
+}
+
+export function antigravityCodexConfigPath() {
+  return join(appHome(), "codex", "config.toml.antigravity");
+}
+
 export function codexConfigPath() {
   const configured = process.env.CODEX_HOME?.trim();
   return join(resolve(expandPath(configured || "~/.codex")), "config.toml");

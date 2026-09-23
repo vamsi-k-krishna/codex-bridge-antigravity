@@ -51,7 +51,11 @@ export function runAgyTurn({
       if (typeof dir === "string" && dir.trim()) args.push("--add-dir", dir);
     }
     if (mode !== "plan") args.push("--disable-slash-commands");
-    if (effort && ["low", "medium", "high"].includes(effort)) args.push("--effort", effort);
+    const modelEffort = model.match(/(?:^|-)(low|medium|high)$/i)?.[1]?.toLowerCase();
+    const isClaude = /^claude-/i.test(model);
+    if (effort && ["low", "medium", "high"].includes(effort) && !modelEffort && !isClaude) {
+      args.push("--effort", effort);
+    }
     if (conversationId) args.push("--conversation", conversationId);
 
     let child;
